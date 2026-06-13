@@ -16,7 +16,7 @@ pair<float*, float*> floyd_space_generate_dual(int n);
 void floyd_exe_CPU(int n, float* graph);
 void floyd_setup_and_exe_GPU(int n, float* graph, const char* version);
 
-// CUDA Kernel
+// CUDA Kernel (Base)
 __global__ void floyd_exe_GPU_base(float* graph, int n, int k) {
     int i = blockIdx.y * blockDim.y + threadIdx.y + 1;
     int j = blockIdx.x * blockDim.x + threadIdx.x + 1;
@@ -34,8 +34,36 @@ __global__ void floyd_exe_GPU_base(float* graph, int n, int k) {
     }
 }
 
+// CUDA Kernel (Fully Optimized)
 __global__ void floyd_exe_GPU_v1(float* graph, int n, int k) {
+    // All Optimization Strategies Implemented
+    // Planned for ablation study
+    int tx = threadIdx.x;
+    int ty = threadIdx.y;
+    int i = blockIdx.y * blockDim.y + threadIdx.y + 1;
+    int j = blockIdx.x * blockDim.x + threadIdx.x + 1;
+
+    // 1. Shared Memory Usage
+    __shared__ float sh_ik[BLOCK_SIZE];
+    __shared__ float sh_kj[BLOCK_SIZE];
+
+    int idx_ij = i * (n + 1) + j;
+    int idx_ik = i * (n + 1) + k;
+    int idx_kj = k * (n + 1) + j;
+
+    // 2. To do: Bank Conflict Issue exists
+    if (tx == 0 && i <= n) sh_ik[ty] = graph[idx_ik];
+    if (ty == 0 && j <= n) sh_kj[tx] = graph[idx_kj];
+    __syncthreads();
+
+    if (i <= n && j <= n) {
+        if (sh_ik[ty] != INF && sh_kj[tx] != INF) {
+            // Branchless update using fminf
+            graph[idx_ij] = fminf(graph[idx_ij], sh_ik[ty] + sh_kj[tx]);
+        }
+    }
 }
+
 
 // Main
 int main() {
@@ -48,8 +76,8 @@ int main() {
         cout << "--- GPU_base 수행 시작 ---" << endl;
         floyd_setup_and_exe_GPU(n, graph_gpu, "base");
 
-        // cout << "--- GPU_v1 수행 시작 ---" << endl;
-        // floyd_setup_and_exe_GPU(n, graph_gpu, "v1");
+        cout << "--- GPU_v1 수행 시작 ---" << endl;
+        floyd_setup_and_exe_GPU(n, graph_gpu, "v1");
 
         delete[] graph_cpu;
         delete[] graph_gpu;
