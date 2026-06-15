@@ -156,20 +156,37 @@ __global__ void floyd_exe_GPU_v4(float* graph, int n, int k) {
 
 // Main
 int main() {
-    for (int n = 35000; n <= 40000; n += 1000) {
-        auto [graph_cpu, graph_gpu] = floyd_space_generate_dual(n);
+    for (int n = 35000; n <= 40000; n += 500) {
+        auto [graph_1, graph_2] = floyd_space_generate_dual(n);
+        long long array_size = (long long)(n + 1) * (n + 1);
+
 
         cout << "--- CPU 수행 시작 ---" << endl;
-        floyd_exe_CPU(n, graph_cpu);
+        floyd_exe_CPU(n, graph_2);
+        memcpy(graph_2, graph_1, array_size * sizeof(float));
 
         cout << "--- GPU_base 수행 시작 ---" << endl;
-        floyd_setup_and_exe_GPU(n, graph_gpu, "base");
+        floyd_setup_and_exe_GPU(n, graph_2, "base");
+        memcpy(graph_2, graph_1, array_size * sizeof(float));
 
         cout << "--- GPU_v1 수행 시작 ---" << endl;
-        floyd_setup_and_exe_GPU(n, graph_gpu, "v1");
+        floyd_setup_and_exe_GPU(n, graph_2, "v1");
+        memcpy(graph_2, graph_1, array_size * sizeof(float));
 
-        delete[] graph_cpu;
-        delete[] graph_gpu;
+        cout << "--- GPU_v2 수행 시작 ---" << endl;
+        floyd_setup_and_exe_GPU(n, graph_2, "v2");
+        memcpy(graph_2, graph_1, array_size * sizeof(float));
+
+        cout << "--- GPU_v3 수행 시작 ---" << endl;
+        floyd_setup_and_exe_GPU(n, graph_2, "v3");
+        memcpy(graph_2, graph_1, array_size * sizeof(float));
+
+        cout << "--- GPU_v4 수행 시작 ---" << endl;
+        floyd_setup_and_exe_GPU(n, graph_2, "v4");
+        memcpy(graph_2, graph_1, array_size * sizeof(float));
+
+        delete[] graph_1;
+        delete[] graph_2;
     }
     return 0;
 }
@@ -270,6 +287,25 @@ void floyd_setup_and_exe_GPU(int n, float* graph, const char* version){
         for (int k = 1; k <= n; k++) {
             floyd_exe_GPU_v1<<<dimGrid, dimBlock>>>(dev_graph, n, k);
         }
+    }
+    else if (strcmp(version, "v2") == 0) {
+        for (int k = 1; k <= n; k++) {
+            floyd_exe_GPU_v2<<<dimGrid, dimBlock>>>(dev_graph, n, k);
+        }
+    }
+    else if (strcmp(version, "v3") == 0) {
+        for (int k = 1; k <= n; k++) {
+            floyd_exe_GPU_v3<<<dimGrid, dimBlock>>>(dev_graph, n, k);
+        }
+    }
+    else if (strcmp(version, "v4") == 0) {
+        for (int k = 1; k <= n; k++) {
+            floyd_exe_GPU_v4<<<dimGrid, dimBlock>>>(dev_graph, n, k);
+        }
+    }
+    else {
+        fprintf(stderr, "Error: Invalid version '%s'. Please choose from [base, v1, v2, v3, v4].\n", version);
+        exit(1);
     }
 
     cudaDeviceSynchronize();
