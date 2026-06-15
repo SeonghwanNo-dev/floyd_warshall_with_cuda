@@ -19,8 +19,8 @@ const int BLOCK_SIZE = 32;
 // Functions
 pair<float*, float*> floyd_space_generate_dual(int n);
 void floyd_exe_CPU(int n, float* graph);
-void floyd_setup_and_exe_GPU(int n, float* graph, const char* version);
 void save_log_to_json(const std::string& version, double elapsed_time, long long total_weight);
+void floyd_setup_and_exe_GPU(int n, float* graph, const char* version);
 
 
 // CUDA Kernel (Base)
@@ -271,6 +271,26 @@ void floyd_exe_CPU(int n, float* graph){
     cout << "========================================\n" << endl;
 }
 
+// JSON 로그를 파일에 누적 저장하는 함수
+void save_log_to_json(int n, const std::string& version, double elapsed_time, long long total_weight) {
+    const std::string file_path = "./result.txt";
+    
+    std::ofstream log_file(file_path, std::ios::app);
+    
+    if (log_file.is_open()) {
+        log_file << "{"
+                 << "\"n\": " << n << ", "
+                 << "\"version\": \"" << version << "\", "
+                 << "\"elapsed_time_ms\": " << std::fixed << std::setprecision(6) << elapsed_time << ", "
+                 << "\"total_weight\": " << total_weight
+                 << "}\n";
+                 
+        log_file.close();
+    } else {
+        std::cerr << "[오류] " << file_path << " 파일을 열 수 없습니다." << std::endl;
+    }
+}
+
 void floyd_setup_and_exe_GPU(int n, float* graph, const char* version){
     auto start = chrono::high_resolution_clock::now();
 
@@ -331,26 +351,7 @@ void floyd_setup_and_exe_GPU(int n, float* graph, const char* version){
     }
     cout << "-> GPU 알고리즘 수행 시간: " << duration.count() << " ms" << endl;
     cout << "-> 결과 (유효 경로 가중치 총합): " << total_sum << endl;
-    save_log_to_json(version, duration.count(), total_sum);
+    save_log_to_json(n, version, duration.count(), total_sum);
     cout << "========================================\n" << endl;
 }
 
-
-// JSON 로그를 파일에 누적 저장하는 함수
-void save_log_to_json(const std::string& version, double elapsed_time, long long total_weight) {
-    const std::string file_path = "./result.txt";
-    
-    std::ofstream log_file(file_path, std::ios::app);
-    
-    if (log_file.is_open()) {
-        log_file << "{"
-                 << "\"version\": \"" << version << "\", "
-                 << "\"elapsed_time_ms\": " << std::fixed << std::setprecision(6) << elapsed_time << ", "
-                 << "\"total_weight\": " << total_weight
-                 << "}\n";
-                 
-        log_file.close();
-    } else {
-        std::cerr << "[오류] " << file_path << " 파일을 열 수 없습니다." << std::endl;
-    }
-}
