@@ -51,18 +51,107 @@ __global__ void floyd_exe_GPU_v1(float* graph, int n, int k) {
     int idx_ik = i * (n + 1) + k;
     int idx_kj = k * (n + 1) + j;
 
-    // 2. To do: Bank Conflict Issue exists
+    if (tx == 0 && i <= n) sh_ik[ty] = graph[idx_ik];
+    if (ty == 0 && j <= n) sh_kj[tx] = graph[idx_kj];
+    
+    // 2. Register Usage
+    float current_dist = 0.0f;
+    if (i <= n && j <= n) current_dist = graph[idx_ij];
+    __syncthreads();
+
+    if (i <= n && j <= n) {
+        if (sh_ik[ty] != INF && sh_kj[tx] != INF) {
+            // 3. Branchless update using fminf
+            current_dist = fminf(current_dist, sh_ik[ty] + sh_kj[tx]);
+            graph[idx_ij] = current_dist;
+        }
+    }
+}
+
+// CUDA Kernel (Except Shared Memory Usage)
+__global__ void floyd_exe_GPU_v2(float* graph, int n, int k) {
+    int i = blockIdx.y * blockDim.y + threadIdx.y + 1;
+    int j = blockIdx.x * blockDim.x + threadIdx.x + 1;
+
+    if (i <= n && j <= n) {
+        int idx_ij = i * (n + 1) + j;
+        int idx_ik = i * (n + 1) + k;
+        int idx_kj = k * (n + 1) + j;
+
+        // 2. Register Usage
+        float current_dist = graph[idx_ij];
+
+        if (graph[idx_ik] != INF && graph[idx_kj] != INF) {
+            // 3. Branchless update using fminf
+            current_dist = fminf(current_dist, graph[idx_ik] + graph[idx_kj]);
+            graph[idx_ij] = current_dist;
+        }
+    }
+}
+
+
+// CUDA Kernel (Except Register Usage)
+__global__ void floyd_exe_GPU_v3(float* graph, int n, int k) {
+    int tx = threadIdx.x;
+    int ty = threadIdx.y;
+    int i = blockIdx.y * blockDim.y + threadIdx.y + 1;
+    int j = blockIdx.x * blockDim.x + threadIdx.x + 1;
+
+    // 1. Shared Memory Usage
+    __shared__ float sh_ik[BLOCK_SIZE];
+    __shared__ float sh_kj[BLOCK_SIZE];
+
+    int idx_ij = i * (n + 1) + j;
+    int idx_ik = i * (n + 1) + k;
+    int idx_kj = k * (n + 1) + j;
+
     if (tx == 0 && i <= n) sh_ik[ty] = graph[idx_ik];
     if (ty == 0 && j <= n) sh_kj[tx] = graph[idx_kj];
     __syncthreads();
 
     if (i <= n && j <= n) {
         if (sh_ik[ty] != INF && sh_kj[tx] != INF) {
-            // Branchless update using fminf
+            // 3. Branchless update using fminf
             graph[idx_ij] = fminf(graph[idx_ij], sh_ik[ty] + sh_kj[tx]);
         }
     }
 }
+
+
+
+// CUDA Kernel (Except fminf)
+__global__ void floyd_exe_GPU_v4(float* graph, int n, int k) {
+    int tx = threadIdx.x;
+    int ty = threadIdx.y;
+    int i = blockIdx.y * blockDim.y + threadIdx.y + 1;
+    int j = blockIdx.x * blockDim.x + threadIdx.x + 1;
+
+    // 1. Shared Memory Usage
+    __shared__ float sh_ik[BLOCK_SIZE];
+    __shared__ float sh_kj[BLOCK_SIZE];
+
+    int idx_ij = i * (n + 1) + j;
+    int idx_ik = i * (n + 1) + k;
+    int idx_kj = k * (n + 1) + j;
+
+    if (tx == 0 && i <= n) sh_ik[ty] = graph[idx_ik];
+    if (ty == 0 && j <= n) sh_kj[tx] = graph[idx_kj];
+
+    // 2. Register Usage
+    float current_dist = 0.0f;
+    if (i <= n && j <= n) current_dist = graph[idx_ij];
+    __syncthreads();
+
+    if (i <= n && j <= n) {
+        if (sh_ik[ty] != INF && sh_kj[tx] != INF) {
+            if (current_dist > sh_ik[ty] + sh_kj[tx]) {
+                current_dist = sh_ik[ty] + sh_kj[tx];
+                graph[idx_ij] = current_dist;
+            }
+        }
+    }
+}
+
 
 
 // Main
